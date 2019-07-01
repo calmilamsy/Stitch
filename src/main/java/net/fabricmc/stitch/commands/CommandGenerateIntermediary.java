@@ -16,6 +16,7 @@
 
 package net.fabricmc.stitch.commands;
 
+import net.fabricmc.mappings.MappingsProvider;
 import net.fabricmc.stitch.Command;
 import net.fabricmc.stitch.representation.*;
 
@@ -29,12 +30,12 @@ public class CommandGenerateIntermediary extends Command {
 
     @Override
     public String getHelpString() {
-        return "<input-jar> <mapping-name> [-t|--target-namespace <namespace>] [-p|--obfuscation-pattern <regex pattern>]...";
+        return "<input-jar> <glue-mapping-file> <new-mapping-file> [-t|--target-namespace <namespace>] [-k|--keep-glue] [-p|--obfuscation-pattern <regex pattern>]...";
     }
 
     @Override
     public boolean isArgumentCountValid(int count) {
-        return count >= 2;
+        return count >= 3;
     }
 
     @Override
@@ -48,10 +49,13 @@ public class CommandGenerateIntermediary extends Command {
             e.printStackTrace();
         }
 
-        GenState state = new GenState();
+        GenState state;
+        try (FileInputStream in = new FileInputStream(new File(args[1]))) {
+        	state = new GenState(MappingsProvider.readTinyMappings(in));
+        }
         boolean clearedPatterns = false;
 
-        for (int i = 2; i < args.length; i++) {
+        for (int i = 3; i < args.length; i++) {
             switch (args[i].toLowerCase(Locale.ROOT)) {
                 case "-t":
                 case "--target-namespace":
@@ -67,11 +71,15 @@ public class CommandGenerateIntermediary extends Command {
                     state.addObfuscatedPattern(args[i + 1]);
                     i++;
                     break;
+                case "-k":
+                case "--keep-glue":
+                	state.keepGlue();
+                    break;
             }
         }
 
         System.err.println("Generating new mappings...");
-        state.generate(new File(args[1]), jarEntry, null);
+        state.generate(new File(args[2]), jarEntry, null);
         System.err.println("Done!");
     }
 }

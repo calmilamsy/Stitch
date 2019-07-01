@@ -17,6 +17,7 @@
 package net.fabricmc.stitch.commands;
 
 import net.fabricmc.mappings.EntryTriple;
+import net.fabricmc.mappings.Mappings;
 import net.fabricmc.mappings.MappingsProvider;
 import net.fabricmc.stitch.representation.*;
 import net.fabricmc.stitch.util.MatcherUtil;
@@ -24,6 +25,7 @@ import net.fabricmc.stitch.util.Pair;
 import net.fabricmc.stitch.util.StitchUtil;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.commons.Remapper;
 
 import java.io.*;
 import java.util.*;
@@ -31,23 +33,49 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 class GenState {
+	private class InterRemapper extends Remapper {
+		private final ClassStorage storage;
+
+		public InterRemapper(ClassStorage storage) {
+			this.storage = storage;
+		}
+
+		@Override
+		public String map(String internalName) {
+			JarClassEntry entry = storage.getClass(internalName, false);
+			return entry != null ? getClassName(storage, entry, targetNamespace) : internalName;
+		}
+
+		@Override
+		public String mapMethodName(String owner, String name, String descriptor) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public String mapFieldName(String owner, String name, String descriptor) {
+			throw new UnsupportedOperationException();
+		}
+	}
+	
     private final Map<String, Integer> counters = new HashMap<>();
     private final Map<AbstractJarEntry, Integer> values = new IdentityHashMap<>();
+    private final GenMap server, client;
     private GenMap oldToIntermediary, newToOld;
     private GenMap newToIntermediary;
     private boolean interactive = true;
-    private boolean writeAll = false;
+    private boolean keepGlue = false;
     private Scanner scanner = new Scanner(System.in);
 
     private String targetNamespace = "net/minecraft/";
     private final List<Pattern> obfuscatedPatterns = new ArrayList<Pattern>();
 
-    public GenState() {
-        this.obfuscatedPatterns.add(Pattern.compile("^[^/]*$")); // Default ofbfuscation. Minecraft classes without a package are obfuscated.
-    }
+    public GenState(Mappings realMappings) {
+        this.obfuscatedPatterns.add(Pattern.compile("^[^/]*$")); // Default obfuscation. Minecraft classes without a package are obfuscated.
 
-    public void setWriteAll(boolean writeAll) {
-        this.writeAll = writeAll;
+        server = new GenMap();
+        server.load(realMappings, "glue", "server");
+        client = new GenMap();
+        client.load(realMappings, "glue", "client");
     }
 
     public void disableInteractive() {
@@ -77,6 +105,10 @@ class GenState {
         this.obfuscatedPatterns.add(Pattern.compile(regex));
     }
 
+    public void keepGlue() {
+    	keepGlue = true;
+    }
+
     public void setCounter(String key, int value) {
         counters.put(key, value);
     }
@@ -92,7 +124,7 @@ class GenState {
             try (FileInputStream inputStream = new FileInputStream(file)) {
                 newToIntermediary.load(
                         MappingsProvider.readTinyMappings(inputStream),
-                        "official",
+                        "glue",
                         "intermediary"
                 );
             }
@@ -100,7 +132,9 @@ class GenState {
 
         try (FileWriter fileWriter = new FileWriter(file)) {
             try (BufferedWriter writer = new BufferedWriter(fileWriter)) {
-                writer.write("v1\tofficial\tintermediary\n");
+            	writer.write("v1\tintermediary");
+            	if (keepGlue) writer.write("\tglue");
+                writer.write("\tserver\tclient\n");
 
                 for (JarClassEntry c : jarEntry.getClasses()) {
                     addClass(writer, c, jarOld, jarEntry, this.targetNamespace);
@@ -118,13 +152,58 @@ class GenState {
     }
 
     public static boolean isMappedField(ClassStorage storage, JarClassEntry c, JarFieldEntry f) {
-        return f.getName().length() <= 2 || (f.getName().length() == 3 && f.getName().charAt(2) == '_');
+        return f.getName().startsWith("field_");
     }
 
     public static boolean isMappedMethod(ClassStorage storage, JarClassEntry c, JarMethodEntry m) {
-        return (m.getName().length() <= 2 || (m.getName().length() == 3 && m.getName().charAt(2) == '_')) && m.getName().charAt(0) != '<' && m.isSource(storage, c);
+        return m.getName().startsWith("method_") && m.isSource(storage, c);
     }
 
+    private String getClassName(ClassStorage storage, JarClassEntry c, String translatedPrefix) {
+    	if (!obfuscatedPatterns.stream().anyMatch(p -> p.matcher(c.getName()).matches())) {
+    		return c.getFullyQualifiedName();
+    	} else {
+    		String className;
+    		if (!isMappedClass(storage, c)) {
+                className = c.getName();
+            } else {
+                className = null;
+
+                if (newToIntermediary != null) {
+                    String findName = newToIntermediary.getClass(c.getFullyQualifiedName());
+                    if (findName != null) {
+                        String[] r = findName.split("\\$");
+                        className = r[r.length - 1];
+                        if (r.length == 1) {
+                            translatedPrefix = "";
+                        }
+                    }
+                }
+
+                if (className == null && newToOld != null) {
+                    String findName = newToOld.getClass(c.getFullyQualifiedName());
+                    if (findName != null) {
+                        findName = oldToIntermediary.getClass(findName);
+                        if (findName != null) {
+                            String[] r = findName.split("\\$");
+                            className = r[r.length - 1];
+                            if (r.length == 1) {
+                                translatedPrefix = "";
+                            }
+
+                        }
+                    }
+                }
+
+                if (className == null) {
+                    className = next(c, "class");
+                }
+            }
+
+    		return translatedPrefix + className;
+    	}
+    }
+    
     @Nullable
     private String getFieldName(ClassStorage storage, JarClassEntry c, JarFieldEntry f) {
         if (!isMappedField(storage, c, f)) {
@@ -320,51 +399,24 @@ class GenState {
     }
 
     private void addClass(BufferedWriter writer, JarClassEntry c, ClassStorage storageOld, ClassStorage storage, String translatedPrefix) throws IOException {
-        String className = c.getName();
-        String cname = "";
+        String className = getClassName(storage, c, translatedPrefix);
 
-        if(!this.obfuscatedPatterns.stream().anyMatch(p -> p.matcher(className).matches())) {
-            translatedPrefix = c.getFullyQualifiedName();
-        } else {
-            if (!isMappedClass(storage, c)) {
-                cname = c.getName();
-            } else {
-                cname = null;
-
-                if (newToIntermediary != null) {
-                    String findName = newToIntermediary.getClass(c.getFullyQualifiedName());
-                    if (findName != null) {
-                        String[] r = findName.split("\\$");
-                        cname = r[r.length - 1];
-                        if (r.length == 1) {
-                            translatedPrefix = "";
-                        }
-                    }
-                }
-
-                if (cname == null && newToOld != null) {
-                    String findName = newToOld.getClass(c.getFullyQualifiedName());
-                    if (findName != null) {
-                        findName = oldToIntermediary.getClass(findName);
-                        if (findName != null) {
-                            String[] r = findName.split("\\$");
-                            cname = r[r.length - 1];
-                            if (r.length == 1) {
-                                translatedPrefix = "";
-                            }
-
-                        }
-                    }
-                }
-
-                if (cname == null) {
-                    cname = next(c, "class");
-                }
-            }
+        writer.write("CLASS\t");
+        writer.write(className);
+        writer.write('\t');
+        if (keepGlue) {
+        	writer.write(c.getFullyQualifiedName());
+        	writer.write('\t');
         }
+        String serverName = server.getClass(c.getFullyQualifiedName());
+        if (serverName != null) writer.write(serverName);
+        writer.write('\t');
+        String clientName = client.getClass(c.getFullyQualifiedName());
+        if (clientName != null) writer.write(clientName);
+        writer.write('\n');
 
-        writer.write("CLASS\t" + c.getFullyQualifiedName() + "\t" + translatedPrefix + cname + "\n");
-
+        Remapper remapper = new InterRemapper(storage);
+        
         for (JarFieldEntry f : c.getFields()) {
             String fName = getFieldName(storage, c, f);
             if (fName == null) {
@@ -372,10 +424,23 @@ class GenState {
             }
 
             if (fName != null) {
-                writer.write("FIELD\t" + c.getFullyQualifiedName()
-                        + "\t" + f.getDescriptor()
-                        + "\t" + f.getName()
-                        + "\t" + fName + "\n");
+                writer.write("FIELD\t");
+                writer.write(className);
+                writer.write('\t');
+                writer.write(remapper.mapDesc(f.getDescriptor()));
+                writer.write('\t');
+                writer.write(fName);
+                writer.write('\t');
+                if (keepGlue) {
+	                writer.write(f.getName());
+	                writer.write('\t');
+                }
+                EntryTriple serverField = server.getField(c.getFullyQualifiedName(), f.getName(), f.getDescriptor());
+                if (serverField != null) writer.write(serverField.getName());
+                writer.write('\t');
+                EntryTriple clientField = client.getField(c.getFullyQualifiedName(), f.getName(), f.getDescriptor());
+                if (clientField != null) writer.write(clientField.getName());
+                writer.write('\n');
             }
         }
 
@@ -388,15 +453,28 @@ class GenState {
             }
 
             if (mName != null) {
-                writer.write("METHOD\t" + c.getFullyQualifiedName()
-                        + "\t" + m.getDescriptor()
-                        + "\t" + m.getName()
-                        + "\t" + mName + "\n");
+                writer.write("METHOD\t");
+                writer.write(className);
+                writer.write('\t');
+                writer.write(remapper.mapMethodDesc(m.getDescriptor()));
+                writer.write('\t');
+                writer.write(mName);
+                writer.write('\t');
+                if (keepGlue) {
+	                writer.write(m.getName());
+	                writer.write('\t');
+                }
+                EntryTriple serverMethod = server.getField(c.getFullyQualifiedName(), m.getName(), m.getDescriptor());
+                if (serverMethod != null) writer.write(serverMethod.getName());
+                writer.write('\t');
+                EntryTriple clientMethod = client.getField(c.getFullyQualifiedName(), m.getName(), m.getDescriptor());
+                if (clientMethod != null) writer.write(clientMethod.getName());
+                writer.write('\n');
             }
         }
 
         for (JarClassEntry cc : c.getInnerClasses()) {
-            addClass(writer, cc, storageOld, storage, translatedPrefix + cname + "$");
+            addClass(writer, cc, storageOld, storage, className + '$');
         }
     }
 
