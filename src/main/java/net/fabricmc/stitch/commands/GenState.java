@@ -440,6 +440,7 @@ class GenState {
                 writer.write('\t');
                 EntryTriple clientField = client.getField(c.getFullyQualifiedName(), f.getName(), f.getDescriptor());
                 if (clientField != null) writer.write(clientField.getName());
+                assert serverField != null || clientField != null: "Unable to find origin for " + c.getFullyQualifiedName() + '#' + f.getName() + " (" + f.getDescriptor() + ')';
                 writer.write('\n');
             }
         }
@@ -464,11 +465,12 @@ class GenState {
 	                writer.write(m.getName());
 	                writer.write('\t');
                 }
-                EntryTriple serverMethod = server.getField(c.getFullyQualifiedName(), m.getName(), m.getDescriptor());
+                EntryTriple serverMethod = server.getMethod(c.getFullyQualifiedName(), m.getName(), m.getDescriptor());
                 if (serverMethod != null) writer.write(serverMethod.getName());
                 writer.write('\t');
-                EntryTriple clientMethod = client.getField(c.getFullyQualifiedName(), m.getName(), m.getDescriptor());
+                EntryTriple clientMethod = client.getMethod(c.getFullyQualifiedName(), m.getName(), m.getDescriptor());
                 if (clientMethod != null) writer.write(clientMethod.getName());
+                assert serverMethod != null || clientMethod != null: "Unable to find origin for " + c.getFullyQualifiedName() + '#' + m.getName() + m.getDescriptor();
                 writer.write('\n');
             }
         }
