@@ -420,7 +420,8 @@ class GenState {
         for (JarFieldEntry f : c.getFields()) {
             String fName = getFieldName(storage, c, f);
             if (fName == null) {
-                fName = f.getName();
+                //fName = f.getName();
+            	System.out.println("Skipped nooping " + c.getFullyQualifiedName() + '#' + f.getName());
             }
 
             if (fName != null) {
@@ -449,7 +450,8 @@ class GenState {
             String mName = getMethodName(storageOld, storage, c, m);
             if (mName == null) {
                 if (!m.getName().startsWith("<") && m.isSource(storage, c)) {
-                   mName = m.getName();
+                   //mName = m.getName();
+                   System.out.println("Skipped nooping " + c.getFullyQualifiedName() + '#' + m.getName() + m.getDescriptor());
                 }
             }
 
