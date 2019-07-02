@@ -16,11 +16,14 @@
 
 package net.fabricmc.stitch.commands;
 
+import net.fabricmc.mappings.MappingsProvider;
 import net.fabricmc.stitch.Command;
 import net.fabricmc.stitch.representation.*;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Locale;
 
 public class CommandUpdateIntermediary extends Command {
     public CommandUpdateIntermediary() {
@@ -29,12 +32,12 @@ public class CommandUpdateIntermediary extends Command {
 
     @Override
     public String getHelpString() {
-        return "<old-jar> <new-jar> <old-mapping-file> <new-mapping-file> <match-file>";
+        return "<old-jar> <new-jar> <old-glued-mapping-file> <new-glue-mapping-file> <new-mapping-file> <match-file> [-k|--keep-glue]";
     }
 
     @Override
     public boolean isArgumentCountValid(int count) {
-        return count == 5;
+        return count == 6 || count == 7;
     }
 
     @Override
@@ -57,12 +60,25 @@ public class CommandUpdateIntermediary extends Command {
             e.printStackTrace();
         }
 
-        GenState state = new GenState();
+        GenState state;
+        try (FileInputStream in = new FileInputStream(new File(args[3]))) {
+        	state = new GenState(MappingsProvider.readTinyMappings(in));
+        }
+
+        for (int i = 6; i < args.length; i++) {
+            switch (args[i].toLowerCase(Locale.ROOT)) {
+                case "-k":
+                case "--keep-glue":
+                	state.keepGlue();
+                    break;
+            }
+        }
+
         System.err.println("Loading remapping files...");
-        state.prepareUpdate(new File(args[2]), new File(args[4]));
+        state.prepareUpdate(new File(args[2]), new File(args[5]));
 
         System.err.println("Generating new mappings...");
-        state.generate(new File(args[3]), jarNew, jarOld);
+        state.generate(new File(args[4]), jarNew, jarOld);
         System.err.println("Done!");
     }
 
