@@ -16,11 +16,13 @@
 
 package net.fabricmc.stitch.commands;
 
+import net.fabricmc.mappings.MappingsProvider;
 import net.fabricmc.stitch.Command;
 import net.fabricmc.stitch.representation.JarRootEntry;
 import net.fabricmc.stitch.representation.JarReader;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Locale;
 
@@ -31,7 +33,7 @@ public class CommandRewriteIntermediary extends Command {
 
     @Override
     public String getHelpString() {
-        return "<jar> <old-mapping-file> <new-mapping-file> [--writeAll]";
+        return "<jar> <old-glued-mapping-file> <new-mapping-file> [-k|--keep-glue]";
     }
 
     @Override
@@ -50,12 +52,16 @@ public class CommandRewriteIntermediary extends Command {
             e.printStackTrace();
         }
 
-        GenState state = new GenState();
+        GenState state;
+        try (FileInputStream in = new FileInputStream(new File(args[1]))) {
+        	state = new GenState(MappingsProvider.readTinyMappings(in));
+        }
 
         for (int i = 3; i < args.length; i++) {
             switch (args[i].toLowerCase(Locale.ROOT)) {
-                case "--writeall":
-                    state.setWriteAll(true);
+                case "-k":
+                case "--keep-glue":
+                	state.keepGlue();
                     break;
             }
         }

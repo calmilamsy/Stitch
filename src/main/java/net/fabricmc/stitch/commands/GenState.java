@@ -502,7 +502,7 @@ class GenState {
         try (FileInputStream inputStream = new FileInputStream(oldMappings)) {
             oldToIntermediary.load(
                     MappingsProvider.readTinyMappings(inputStream),
-                    "official",
+                    "glue",
                     "intermediary"
             );
         }
