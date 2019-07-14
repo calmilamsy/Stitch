@@ -147,16 +147,49 @@ class GenState {
         }
     }
 
-    public static boolean isMappedClass(ClassStorage storage, JarClassEntry c) {
-        return !c.isAnonymous();
+    public enum MappingType {
+    	SKIPPED, RETAINED, RENAMED;
     }
 
-    public static boolean isMappedField(ClassStorage storage, JarClassEntry c, JarFieldEntry f) {
-        return f.getName().startsWith("field_");
+    public MappingType isMappedClass(ClassStorage storage, JarClassEntry c) {
+    	String name = c.getName();
+    	if (c.getName().startsWith("class_")) return MappingType.RENAMED;
+
+    	String serverName = server.getClass(c.getFullyQualifiedName());
+        if (serverName != null && !serverName.equals(name)) return MappingType.RETAINED;
+
+        String clientName = client.getClass(c.getFullyQualifiedName());
+        if (clientName != null && !clientName.equals(name)) return MappingType.RETAINED;
+
+        return MappingType.SKIPPED;
     }
 
-    public static boolean isMappedMethod(ClassStorage storage, JarClassEntry c, JarMethodEntry m) {
-        return m.getName().startsWith("method_") && m.isSource(storage, c);
+    public MappingType isMappedField(ClassStorage storage, JarClassEntry c, JarFieldEntry f) {
+    	String name = f.getName();
+        if (name.startsWith("field_")) return MappingType.RENAMED;
+
+        EntryTriple serverField = server.getField(c.getFullyQualifiedName(), f.getName(), f.getDescriptor());
+        if (serverField != null && !serverField.getName().equals(name)) return MappingType.RETAINED;
+
+        EntryTriple clientField = client.getField(c.getFullyQualifiedName(), f.getName(), f.getDescriptor());
+        if (clientField != null && !clientField.getName().equals(name)) return MappingType.RETAINED;
+
+        return MappingType.SKIPPED;
+    }
+
+    public MappingType isMappedMethod(ClassStorage storage, JarClassEntry c, JarMethodEntry m) {
+    	if (!m.isSource(storage, c)) return MappingType.SKIPPED;
+
+    	String name = m.getName();
+        if (name.startsWith("method_")) return MappingType.RENAMED;
+
+        EntryTriple serverMethod = server.getMethod(c.getFullyQualifiedName(), m.getName(), m.getDescriptor());
+        if (serverMethod != null && !serverMethod.getName().equals(name)) return MappingType.RETAINED;
+
+        EntryTriple clientMethod = client.getMethod(c.getFullyQualifiedName(), m.getName(), m.getDescriptor());
+        if (clientMethod != null && !clientMethod.getName().equals(name)) return MappingType.RETAINED;
+
+        return MappingType.SKIPPED;
     }
 
     private String getClassName(ClassStorage storage, JarClassEntry c, String translatedPrefix) {
@@ -164,9 +197,15 @@ class GenState {
     		return c.getFullyQualifiedName();
     	} else {
     		String className;
-    		if (!isMappedClass(storage, c)) {
+    		switch (isMappedClass(storage, c)) {
+    		case SKIPPED:
+    			return null;
+
+    		case RETAINED:
                 className = c.getName();
-            } else {
+                break;
+
+    		case RENAMED:
                 className = null;
 
                 if (newToIntermediary != null) {
@@ -198,6 +237,10 @@ class GenState {
                 if (className == null) {
                     className = next(c, "class");
                 }
+                break;
+
+    		default:
+    			throw new IllegalStateException("Unexpected mapping type: " + isMappedClass(storage, c));
             }
 
     		return translatedPrefix + className;
@@ -206,9 +249,16 @@ class GenState {
     
     @Nullable
     private String getFieldName(ClassStorage storage, JarClassEntry c, JarFieldEntry f) {
-        if (!isMappedField(storage, c, f)) {
-            return null;
-        }
+    	switch (isMappedField(storage, c, f)) {
+    	case SKIPPED:
+    		return null;
+    		
+    	case RETAINED:
+    		return f.getName();
+    		
+    	case RENAMED:
+    		break;
+    	}
 
         if (newToIntermediary != null) {
             EntryTriple findEntry = newToIntermediary.getField(c.getFullyQualifiedName(), f.getName(), f.getDescriptor());
@@ -337,9 +387,16 @@ class GenState {
 
     @Nullable
     private String getMethodName(ClassStorage storageOld, ClassStorage storageNew, JarClassEntry c, JarMethodEntry m) {
-        if (!isMappedMethod(storageNew, c, m)) {
-            return null;
-        }
+    	switch (isMappedMethod(storageNew, c, m)) {
+    	case SKIPPED:
+    		return null;
+
+    	case RETAINED:
+    		return m.getName();
+
+    	case RENAMED:
+    		break;
+    	}
 
         if (methodNames.containsKey(m)) {
             return methodNames.get(m);
@@ -400,6 +457,15 @@ class GenState {
 
     private void addClass(BufferedWriter writer, JarClassEntry c, ClassStorage storageOld, ClassStorage storage, String translatedPrefix) throws IOException {
         String className = getClassName(storage, c, translatedPrefix);
+        if (className == null) {
+        	System.out.println("Skipped nooping " + c.getFullyQualifiedName());
+
+        	for (JarClassEntry cc : c.getInnerClasses()) {
+        		//assert getClassName(storage, cc, translatedPrefix) == null: "Wanted to name " + cc.getFullyQualifiedName() + " but didn't want to name " + c.getFullyQualifiedName();
+        		addClass(writer, cc, storageOld, storage, c.getFullyQualifiedName() + '$');
+        	}
+        	return;
+        }
 
         writer.write("CLASS\t");
         writer.write(className);
