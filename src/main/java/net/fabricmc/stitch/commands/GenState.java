@@ -459,27 +459,22 @@ class GenState {
         String className = getClassName(storage, c, translatedPrefix);
         if (className == null) {
         	System.out.println("Skipped nooping " + c.getFullyQualifiedName());
-
-        	for (JarClassEntry cc : c.getInnerClasses()) {
-        		//assert getClassName(storage, cc, translatedPrefix) == null: "Wanted to name " + cc.getFullyQualifiedName() + " but didn't want to name " + c.getFullyQualifiedName();
-        		addClass(writer, cc, storageOld, storage, c.getFullyQualifiedName() + '$');
-        	}
-        	return;
+        	className = c.getName();
+        } else {
+	        writer.write("CLASS\t");
+	        writer.write(className);
+	        writer.write('\t');
+	        if (keepGlue) {
+	        	writer.write(c.getFullyQualifiedName());
+	        	writer.write('\t');
+	        }
+	        String serverName = server.getClass(c.getFullyQualifiedName());
+	        if (serverName != null) writer.write(serverName);
+	        writer.write('\t');
+	        String clientName = client.getClass(c.getFullyQualifiedName());
+	        if (clientName != null) writer.write(clientName);
+	        writer.write('\n');
         }
-
-        writer.write("CLASS\t");
-        writer.write(className);
-        writer.write('\t');
-        if (keepGlue) {
-        	writer.write(c.getFullyQualifiedName());
-        	writer.write('\t');
-        }
-        String serverName = server.getClass(c.getFullyQualifiedName());
-        if (serverName != null) writer.write(serverName);
-        writer.write('\t');
-        String clientName = client.getClass(c.getFullyQualifiedName());
-        if (clientName != null) writer.write(clientName);
-        writer.write('\n');
 
         Remapper remapper = new InterRemapper(storage);
         
