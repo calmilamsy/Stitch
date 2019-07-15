@@ -40,6 +40,7 @@ public class Main {
         addCommand(new CommandReorderTiny());
         addCommand(new CommandRewriteIntermediary());
         addCommand(new CommandUpdateIntermediary());
+        addCommand(new CommandRenameEnigma());
     }
 
     public static void main(String[] args) {
