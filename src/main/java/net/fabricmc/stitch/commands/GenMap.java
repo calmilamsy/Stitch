@@ -52,15 +52,21 @@ public class GenMap {
 
     public void load(Mappings mappings, String from, String to) {
         for (ClassEntry classEntry : mappings.getClassEntries()) {
-            map.put(classEntry.get(from), new Class(classEntry.get(to)));
+        	String fromClass = classEntry.get(from);
+        	if (fromClass == null) continue;
+            map.put(fromClass, new Class(classEntry.get(to)));
         }
 
         for (FieldEntry fieldEntry : mappings.getFieldEntries()) {
-            map.computeIfAbsent(fieldEntry.get(from).getOwner(), Class::new).fieldMaps.put(fieldEntry.get(from), fieldEntry.get(to));
+        	EntryTriple fromField = fieldEntry.get(from);
+        	if (fromField == null) continue;
+            map.computeIfAbsent(fromField.getOwner(), Class::new).fieldMaps.put(fromField, fieldEntry.get(to));
         }
 
         for (MethodEntry methodEntry : mappings.getMethodEntries()) {
-            map.computeIfAbsent(methodEntry.get(from).getOwner(), Class::new).methodMaps.put(methodEntry.get(from), methodEntry.get(to));
+        	EntryTriple fromMethod = methodEntry.get(from);
+        	if (fromMethod == null) continue;
+            map.computeIfAbsent(fromMethod.getOwner(), Class::new).methodMaps.put(fromMethod, methodEntry.get(to));
         }
     }
     
