@@ -203,6 +203,7 @@ class GenState {
 
     		case RETAINED:
                 className = c.getName();
+                if (c.getFullyQualifiedName().indexOf('$') <= 0) return className; //If the class is not nested skip the prefix
                 break;
 
     		case RENAMED:
