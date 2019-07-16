@@ -152,6 +152,10 @@ public class ClassMerger {
             nodeOut.visibleTypeAnnotations.addAll(nodeC.visibleTypeAnnotations);
         }
 
+        if (nodeC.interfaces.size() + nodeS.interfaces.size() >= 4) {
+			nodeC.interfaces.sort(null);
+			nodeS.interfaces.sort(null);
+		}
         List<String> itfs = StitchUtil.mergePreserveOrder(nodeC.interfaces, nodeS.interfaces);
         nodeOut.interfaces = new ArrayList<>();
 
