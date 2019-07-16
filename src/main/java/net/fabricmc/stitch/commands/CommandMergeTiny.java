@@ -58,7 +58,7 @@ public class CommandMergeTiny extends Command {
 
 	@Override
 	public boolean isArgumentCountValid(int count) {
-		return count >= 4;
+		return count >= 3;
 	}
 
 	private static abstract class TinyLine {
@@ -312,7 +312,7 @@ public class CommandMergeTiny extends Command {
 					ClassEntry commonEntry = commonToAllB.get(commonName);
 
 					for (String namespace : extraNamespaces) {
-						writer.write(' ');
+						writer.write('\t');
 						String name = commonEntry.get(namespace);
 						if (name != null) writer.write(name);
 					}
@@ -325,7 +325,7 @@ public class CommandMergeTiny extends Command {
 					MethodEntry commonEntry = classToMethod.get(commonName);
 
 					for (String namespace : extraNamespaces) {
-						writer.write(' ');
+						writer.write('\t');
 						EntryTriple entry = commonEntry.get(namespace);
 						if (entry != null) writer.write(entry.getName());
 					}
@@ -338,7 +338,7 @@ public class CommandMergeTiny extends Command {
 					FieldEntry commonEntry = classToField.get(commonName);
 
 					for (String namespace : extraNamespaces) {
-						writer.write(' ');
+						writer.write('\t');
 						EntryTriple entry = commonEntry.get(namespace);
 						if (entry != null) writer.write(entry.getName());
 					}
