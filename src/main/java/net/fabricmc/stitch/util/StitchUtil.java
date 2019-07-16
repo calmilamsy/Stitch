@@ -20,7 +20,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URLEncoder;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystemAlreadyExistsException;
 import java.nio.file.FileSystems;
@@ -97,6 +96,8 @@ public final class StitchUtil {
         int j = 0;
 
         while (i < first.size() || j < second.size()) {
+			int startI = i, startJ = j;
+
             while (i < first.size() && j < second.size()
                     && first.get(i).equals(second.get(j))) {
                 out.add(first.get(i));
@@ -113,6 +114,10 @@ public final class StitchUtil {
                 out.add(second.get(j));
                 j++;
             }
+
+			if (startI == i && startJ == j) {
+				throw new IllegalStateException("Deadlocked over " + first + " and " + second);
+			}
         }
 
         return out;
