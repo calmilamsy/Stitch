@@ -313,8 +313,11 @@ public class CommandMergeTiny extends Command {
 
 					for (String namespace : extraNamespaces) {
 						writer.write('\t');
-						String name = commonEntry.get(namespace);
-						if (name != null) writer.write(name);
+
+						if (commonEntry != null) {
+							String name = commonEntry.get(namespace);
+							if (name != null) writer.write(name);
+						}
 					}
 
 					writer.newLine();
@@ -326,8 +329,11 @@ public class CommandMergeTiny extends Command {
 
 					for (String namespace : extraNamespaces) {
 						writer.write('\t');
-						EntryTriple entry = commonEntry.get(namespace);
-						if (entry != null) writer.write(entry.getName());
+
+						if (commonEntry != null) {
+							EntryTriple entry = commonEntry.get(namespace);
+							if (entry != null) writer.write(entry.getName());
+						}
 					}
 
 					writer.newLine();
@@ -339,8 +345,11 @@ public class CommandMergeTiny extends Command {
 
 					for (String namespace : extraNamespaces) {
 						writer.write('\t');
-						EntryTriple entry = commonEntry.get(namespace);
-						if (entry != null) writer.write(entry.getName());
+
+						if (commonEntry != null) {
+							EntryTriple entry = commonEntry.get(namespace);
+							if (entry != null) writer.write(entry.getName());
+						}
 					}
 
 					writer.newLine();					
