@@ -53,7 +53,7 @@ public class CommandMergeTiny extends Command {
 
 	@Override
 	public String getHelpString() {
-		return "<input-a> <input-b> <output> [-c|--common-namespace <namespace>]";
+		return "<input-a> <input-b> <output> [-c|--common-namespace <namespace>] [-h|--leave-holes]";
 	}
 
 	@Override
@@ -248,12 +248,18 @@ public class CommandMergeTiny extends Command {
         }
 
 		String commonNamespace = null;
+		boolean leaveHoles = false;
 		for (int i = 3; i < args.length; i++) {
             switch (args[i].toLowerCase(Locale.ROOT)) {
                 case "-c":
                 case "--common-namespace":
                 	commonNamespace = args[++i];
                     break;
+
+                case "-h":
+                case "--leave-holes":
+                	leaveHoles = true;
+                	break;
             }
         }
 
@@ -294,7 +300,7 @@ public class CommandMergeTiny extends Command {
 
 			writer.write(inputA.firstLine);
 			for (String namespace : extraNamespaces) {
-				writer.write(' ');
+				writer.write('\t');
 				writer.write(namespace);
 			}
 			writer.newLine();
@@ -317,6 +323,8 @@ public class CommandMergeTiny extends Command {
 						if (commonEntry != null) {
 							String name = commonEntry.get(namespace);
 							if (name != null) writer.write(name);
+						} else if (!leaveHoles) {
+							writer.write(commonName);
 						}
 					}
 
@@ -333,6 +341,8 @@ public class CommandMergeTiny extends Command {
 						if (commonEntry != null) {
 							EntryTriple entry = commonEntry.get(namespace);
 							if (entry != null) writer.write(entry.getName());
+						} else if (!leaveHoles) {
+							writer.write(commonName.getName());
 						}
 					}
 
@@ -349,6 +359,8 @@ public class CommandMergeTiny extends Command {
 						if (commonEntry != null) {
 							EntryTriple entry = commonEntry.get(namespace);
 							if (entry != null) writer.write(entry.getName());
+						} else if (!leaveHoles) {
+							writer.write(commonName.getName());
 						}
 					}
 
