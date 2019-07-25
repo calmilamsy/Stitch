@@ -102,16 +102,17 @@ public class CommandFixNesting extends Command {
 
 						if (!missingInners.isEmpty() || missingOuter != null) {
 							assert node != null; //Should have been read to get to this state
-							assert reader != null; //So should this, but we also need this now
+							assert reader != null; //So should this
 
 							//Create the writer with the fully intact class rather than reading the node in (which is missing the method code/debug/frames)
 							ClassWriter writer = new ClassWriter(reader, 0);
+							reader.accept(writer, 0);
 
 							if (!missingInners.isEmpty()) {
 								System.out.println("Fixing missing inners in " + clazz.getFullyQualifiedName() + ": " + missingInners);
 
 								for (JarClassEntry inner : missingInners) {
-									writer.visitInnerClass(inner.getFullyQualifiedName(), getOuter(inner.getFullyQualifiedName()), inner.getName(), inner.getAccess());
+									writer.visitInnerClass(inner.getFullyQualifiedName(), getOuter(inner.getFullyQualifiedName()), inner.isAnonymous() ? null : inner.getName(), inner.getAccess());
 								}
 
 								missingInners.clear();
