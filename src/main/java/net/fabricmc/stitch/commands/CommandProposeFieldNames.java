@@ -28,6 +28,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.util.HashMap;
@@ -50,8 +51,17 @@ public class CommandProposeFieldNames extends Command {
 
     @Override
     public void run(String[] args) throws Exception {
+    	// the namespace used by the input jar
+		String inputNamespace = args.length > 3 ? args[3] : "official";
+		// the namespace written to; write to input namespace if not specified
+		String outputNamespace = args.length > 4 ? args[4] : args.length == 4 ? inputNamespace : "named";
+
+    	run(new File(args[0]), new File(args[1]), new File(args[2]), inputNamespace, outputNamespace);
+    }
+
+    public static void run(File inputJar, File inputMappings, File outputMappings, String inputNamespace, String outputNamespace) throws IOException {
         // entrytriple from the input jar namespace
-        Map<EntryTriple, String> fieldNamesO = new FieldNameFinder().findNames(new File(args[0]));
+        Map<EntryTriple, String> fieldNamesO = new FieldNameFinder().findNames(inputJar);
 
         System.err.println("Found " + fieldNamesO.size() + " interesting names.");
 
@@ -60,18 +70,13 @@ public class CommandProposeFieldNames extends Command {
         Map<EntryTriple, String> fieldNames = new HashMap<>();
 
         Mappings mappings;
-        try (FileInputStream fileIn = new FileInputStream(new File(args[1]))) {
+        try (FileInputStream fileIn = new FileInputStream(inputMappings)) {
             mappings = MappingsProvider.readTinyMappings(fileIn, false);
         }
 
-		// the namespace used by the input jar
-		String inputNamespace = args.length > 3 ? args[3] : "official";
-		// the namespace written to; write to input namespace if not specified
-		String outputNamespace = args.length > 4 ? args[4] : args.length == 4 ? inputNamespace : "named";
-
 		int replaceCount = 0;
-        try (FileInputStream fileIn = new FileInputStream(new File(args[1]));
-            FileOutputStream fileOut = new FileOutputStream(new File(args[2]));
+        try (FileInputStream fileIn = new FileInputStream(inputMappings);
+            FileOutputStream fileOut = new FileOutputStream(outputMappings);
             InputStreamReader fileInReader = new InputStreamReader(fileIn);
             OutputStreamWriter fileOutWriter = new OutputStreamWriter(fileOut);
             BufferedReader reader = new BufferedReader(fileInReader);
