@@ -40,6 +40,8 @@ public class Main {
         addCommand(new CommandReorderTiny());
         addCommand(new CommandRewriteIntermediary());
         addCommand(new CommandUpdateIntermediary());
+
+        addCommand(new CommandFixNesting());
         addCommand(new CommandRenameEnigma());
     }
 
