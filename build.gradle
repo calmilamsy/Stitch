@@ -76,8 +76,14 @@ task allJar(type: Jar) {
 	with jar
 }
 
+task sourcesJar(type: Jar, dependsOn: classes) {
+	classifier = 'sources'
+	from sourceSets.main.allSource
+}
+
 artifacts {
 	archives allJar
+	archives sourcesJar
 }
 
 
@@ -86,6 +92,7 @@ publishing {
 		mavenJava(MavenPublication) {
 			from components.java
 			artifact(allJar)
+			artifact sourcesJar
 		}
 	}
 
