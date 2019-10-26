@@ -19,11 +19,11 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
 import net.fabricmc.stitch.Command;
+import net.fabricmc.stitch.representation.JarClassEntry;
 import net.fabricmc.stitch.representation.JarReader.Builder;
+import net.fabricmc.stitch.representation.JarRootEntry;
 import net.fabricmc.stitch.util.StitchUtil;
 import net.fabricmc.stitch.util.StitchUtil.FileSystemDelegate;
-import net.fabricmc.stitch.representation.JarClassEntry;
-import net.fabricmc.stitch.representation.JarRootEntry;
 
 public class CommandFixNesting extends Command {
 	public CommandFixNesting() {
@@ -94,10 +94,16 @@ public class CommandFixNesting extends Command {
 								(reader = new ClassReader(oldJarFile.getInputStream(entry))).accept(node = new ClassNode(), ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 							}
 
-							String outer = getOuter(clazz.getFullyQualifiedName());
-							if (!outer.equals(node.outerClass)) {
-								missingOuter = outer;
+							if (node.innerClasses.stream().map(inner -> inner.name).noneMatch(clazz.getFullyQualifiedName()::equals)) {
+								missingInners.add(clazz);
 							}
+
+							if (clazz.isAnonymous()) {//Anonymous classes mark parent classes by the outerClass attribute rather than the innerClass
+								String outer = getParent(clazz.getFullyQualifiedName());
+								if (!outer.equals(node.outerClass)) {
+									missingOuter = outer;
+								}
+							} //Classes in methods also do this, but they're more of a nuisance to detect without guessing from line numbers
 						}
 
 						if (!missingInners.isEmpty() || missingOuter != null) {
@@ -112,7 +118,7 @@ public class CommandFixNesting extends Command {
 								System.out.println("Fixing missing inners in " + clazz.getFullyQualifiedName() + ": " + missingInners);
 
 								for (JarClassEntry inner : missingInners) {
-									writer.visitInnerClass(inner.getFullyQualifiedName(), getOuter(inner.getFullyQualifiedName()), inner.isAnonymous() ? null : inner.getName(), inner.getAccess());
+									writer.visitInnerClass(inner.getFullyQualifiedName(), inner.isAnonymous() ? null : getParent(inner.getFullyQualifiedName()), inner.isAnonymous() ? null : inner.getName(), inner.getAccess());
 								}
 
 								missingInners.clear();
@@ -139,10 +145,8 @@ public class CommandFixNesting extends Command {
 		}
 	}
 
-	private static String getOuter(String name) {
-		int split = name.indexOf('$');
-		assert split > 0;
-
-		return name.substring(0, split);
+	private static String getParent(String name) {
+		int split = name.lastIndexOf('$');
+		return split <= 0 ? null : name.substring(0, split);
 	}
 }
