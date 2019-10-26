@@ -43,7 +43,27 @@ class GenState {
 		@Override
 		public String map(String internalName) {
 			JarClassEntry entry = storage.getClass(internalName, false);
-			return entry != null ? getClassName(storage, entry, targetNamespace) : internalName;
+
+			if (entry != null) {
+				int split = internalName.indexOf('$');
+
+				if (split <= 0) {
+					return getClassName(storage, entry, targetNamespace);
+				} else {
+					String parent = targetNamespace;
+
+					do {
+						JarClassEntry parentEntry = storage.getClass(internalName.substring(0, split), false);
+						assert parentEntry != null; //If the original entry wasn't null all the parents exist
+
+						parent = getClassName(storage, parentEntry, parent) + '$';
+					} while ((split = internalName.indexOf('$', split + 1)) > 0);
+
+					return getClassName(storage, entry, parent);
+				}
+			}
+
+			return internalName;
 		}
 
 		@Override
