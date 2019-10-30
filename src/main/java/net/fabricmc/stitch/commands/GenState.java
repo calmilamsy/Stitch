@@ -193,7 +193,7 @@ class GenState {
     }
 
     public MappingType isMappedMethod(ClassStorage storage, JarClassEntry c, JarMethodEntry m) {
-    	if (!m.isSource(storage, c)) return MappingType.SKIPPED;
+    	if (!shouldNoteMethod(storage, c, m)) return MappingType.SKIPPED;
 
     	String name = m.getName();
         if (name.startsWith("method_")) return MappingType.RENAMED;
@@ -205,6 +205,29 @@ class GenState {
         if (clientMethod != null && !clientMethod.getName().equals(name)) return MappingType.RETAINED;
 
         return MappingType.SKIPPED;
+    }
+
+    private boolean shouldNoteMethod(ClassStorage storage, JarClassEntry c, JarMethodEntry m) {
+    	if (m.isSource(storage, c)) return true;
+    	if (!c.getMethods().contains(m)) return false;
+
+    	if (server.getMethod(c.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return false;
+        if (client.getMethod(c.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return false;
+
+    	JarClassEntry parent = c.getSuperClass(storage);
+    	if (parent != null && parent.getMethods().contains(m)) {
+        	if (server.getMethod(parent.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return true;
+        	if (client.getMethod(parent.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return true;
+    	}
+
+    	for (JarClassEntry itf : c.getInterfaces(storage)) {
+    		if (itf.getMethods().contains(m)) {
+    			if (server.getMethod(itf.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return true;
+            	if (client.getMethod(itf.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return true;
+    		}
+    	}
+
+    	return false;
     }
 
     private String getClassName(ClassStorage storage, JarClassEntry c, String translatedPrefix) {
@@ -526,7 +549,7 @@ class GenState {
         for (JarMethodEntry m : c.getMethods()) {
             String mName = getMethodName(storageOld, storage, c, m);
             if (mName == null) {
-                if (!m.getName().startsWith("<") && m.isSource(storage, c)) {
+                if (!m.getName().startsWith("<") && shouldNoteMethod(storage, c, m)) {
                    //mName = m.getName();
                    System.out.println("Skipped nooping " + c.getFullyQualifiedName() + '#' + m.getName() + m.getDescriptor());
                 }
