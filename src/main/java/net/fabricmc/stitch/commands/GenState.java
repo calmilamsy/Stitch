@@ -214,20 +214,35 @@ class GenState {
     	if (server.getMethod(c.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return false;
         if (client.getMethod(c.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return false;
 
-    	JarClassEntry parent = c.getSuperClass(storage);
+    	JarClassEntry parent = c;
+    	do {
+    		parent = parent.getSuperClass(storage);
+    	} while (parent != null && !parent.getMethods().contains(m));
+
     	if (parent != null && parent.getMethods().contains(m)) {
         	if (server.getMethod(parent.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return true;
         	if (client.getMethod(parent.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return true;
     	}
 
-    	for (JarClassEntry itf : c.getInterfaces(storage)) {
-    		if (itf.getMethods().contains(m)) {
-    			if (server.getMethod(itf.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return true;
-            	if (client.getMethod(itf.getFullyQualifiedName(), m.getName(), m.getDescriptor()) == null) return true;
-    		}
-    	}
+    	Deque<JarClassEntry> interfaces = new ArrayDeque<>(c.getInterfaces(storage));
+		boolean seenAny = false;
+		boolean seenServer = false;
+		boolean seenClient = false;
 
-    	return false;
+		JarClassEntry itf;
+		while ((itf = interfaces.poll()) != null) {
+			if (itf.getMethods().contains(m)) {//Stop digging the branch, a parent has been found
+				if (!seenServer && server.getMethod(itf.getFullyQualifiedName(), m.getName(), m.getDescriptor()) != null) seenServer = true;
+            	if (!seenClient && client.getMethod(itf.getFullyQualifiedName(), m.getName(), m.getDescriptor()) != null) seenClient = true;
+
+            	if (seenClient && seenServer) return false;
+            	seenAny = true;
+			} else {
+				interfaces.addAll(itf.getInterfaces(storage));
+			}
+		}
+
+		return seenAny;
     }
 
     private String getClassName(ClassStorage storage, JarClassEntry c, String translatedPrefix) {
