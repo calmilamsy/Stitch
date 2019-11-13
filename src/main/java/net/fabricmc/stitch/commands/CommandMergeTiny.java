@@ -18,11 +18,12 @@ package net.fabricmc.stitch.commands;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -179,8 +180,8 @@ public class CommandMergeTiny extends Command {
 		public final String firstLine;
 		public final List<TinyLine> lines = new ArrayList<>();
 
-		public TinyFile(File file) throws IOException {
-			try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file)))) {
+		public TinyFile(Path file) throws IOException {
+			try (BufferedReader reader = Files.newBufferedReader(file)) {
 				String[] header = (firstLine = reader.readLine()).split("\t");
 				if (header.length <= 1 || !header[0].equals("v1")) {
 					throw new IOException("Invalid mapping version!");
@@ -240,13 +241,6 @@ public class CommandMergeTiny extends Command {
 	}
 	@Override
 	public void run(String[] args) throws Exception {
-		TinyFile inputA = new TinyFile(new File(args[0]));
-
-		Mappings inputB; 
-		try (FileInputStream in = new FileInputStream(new File(args[1]))) {
-        	inputB = MappingsProvider.readTinyMappings(in);
-        }
-
 		String commonNamespace = null;
 		boolean leaveHoles = false;
 		for (int i = 3; i < args.length; i++) {
@@ -261,6 +255,17 @@ public class CommandMergeTiny extends Command {
                 	leaveHoles = true;
                 	break;
             }
+        }
+
+		run(Paths.get(args[0]), Paths.get(args[1]), Paths.get(args[2]), commonNamespace, leaveHoles);
+	}
+
+	public static void run(Path firstInput, Path secondInput, Path output, String commonNamespace, boolean leaveHoles) throws IOException {
+		TinyFile inputA = new TinyFile(firstInput);
+
+		Mappings inputB; 
+		try (InputStream in = Files.newInputStream(secondInput)) {
+        	inputB = MappingsProvider.readTinyMappings(in);
         }
 
 		if (commonNamespace == null) {
@@ -293,7 +298,7 @@ public class CommandMergeTiny extends Command {
 		Map<EntryTriple, MethodEntry> classToMethod = commonToAll(inputB.getMethodEntries(), method -> method.get(commonNamespaceTarget));
 		Map<EntryTriple, FieldEntry> classToField = commonToAll(inputB.getFieldEntries(), field -> field.get(commonNamespaceTarget));
 
-		try (BufferedWriter writer = new BufferedWriter(new FileWriter(args[2]))) {
+		try (BufferedWriter writer = Files.newBufferedWriter(output, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
 			List<String> extraNamespaces = new ArrayList<>(inputB.getNamespaces());
 			extraNamespaces.removeAll(inputA.getNamespaces());
 			if (extraNamespaces.isEmpty()) throw new IllegalArgumentException("No additional namespaces to merge from B");
