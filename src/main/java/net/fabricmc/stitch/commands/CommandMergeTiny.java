@@ -377,7 +377,7 @@ public class CommandMergeTiny extends Command {
 		}
 	}
 
-	private static <K, T> Map<K, T> commonToAll(Iterable<T> entries, Function<T, K> converter) {
+	private static <K, T> Map<K, T> commonToAll(Iterable<? extends T> entries, Function<T, K> converter) {
 		Map<K, T> map = new HashMap<>();
 
 		for (T entry : entries) {
