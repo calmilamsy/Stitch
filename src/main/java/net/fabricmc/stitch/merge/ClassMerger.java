@@ -152,7 +152,7 @@ public class ClassMerger {
             nodeOut.visibleTypeAnnotations.addAll(nodeC.visibleTypeAnnotations);
         }
 
-        if (nodeC.interfaces.size() + nodeS.interfaces.size() >= 4) {
+        if (nodeC.interfaces.size() >= 2 && nodeS.interfaces.size() >= 2) {
 			nodeC.interfaces.sort(null);
 			nodeS.interfaces.sort(null);
 		}
