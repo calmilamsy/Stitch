@@ -6,8 +6,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -56,6 +59,10 @@ public class CommandVerifyIntermediary extends Command {
 			mappings.getMethodEntries().stream().map(entry -> entry.get(namespace)).filter(Objects::nonNull).map(EntryTriple::getOwner).filter(owner -> !owner.startsWith("net/minecraft/class_")).forEach(classes::add);
 			mappings.getFieldEntries().stream().map(entry -> entry.get(namespace)).filter(Objects::nonNull).map(EntryTriple::getOwner).filter(owner -> !owner.startsWith("net/minecraft/class_")).forEach(classes::add);
 
+			findDuplicates(classes, duplicate -> {
+				System.out.println("Duplicate declarations of class mapping in " + namespace + ": " + duplicate);
+			});
+
 			int methods = 0, badMethods = 0;
 			for (MethodEntry entry : mappings.getMethodEntries()) {
 				EntryTriple method = entry.get(namespace);
@@ -63,10 +70,14 @@ public class CommandVerifyIntermediary extends Command {
 
 				methods++;
 				if (!isValid(classes, Stream.concat(Arrays.stream(Type.getArgumentTypes(method.getDesc())), Stream.of(Type.getReturnType(method.getDesc()))))) {
-					System.out.println("Descriptor for " + method + " is invalid");
+					System.out.println("Descriptor for " + memberString(method) + " is invalid");
 					badMethods++;
 				}
 			}
+
+			findDuplicates(mappings.getMethodEntries().stream().map(entry -> entry.get(namespace)).filter(Objects::nonNull).collect(Collectors.toList()), duplicate -> {
+				System.out.println("Duplicate declarations of method mapping in " + namespace + ": " + memberString(duplicate));
+			});
 
 			int fields = 0, badFields = 0;
 			for (FieldEntry entry : mappings.getFieldEntries()) {
@@ -75,13 +86,25 @@ public class CommandVerifyIntermediary extends Command {
 
 				fields++;
 				if (!isValid(classes, Stream.of(Type.getType(field.getDesc())))) {
-					System.out.println("Descriptor for " + field + " is invalid");
+					System.out.println("Descriptor for " + memberString(field) + " is invalid");
 					badFields++;
 				}
 			}
 
+			findDuplicates(mappings.getFieldEntries().stream().map(entry -> entry.get(namespace)).filter(Objects::nonNull).collect(Collectors.toList()), duplicate -> {
+				System.out.println("Duplicate declarations of field mapping in " + namespace + ": " + memberString(duplicate));
+			});
+
 			System.out.printf("%nFound %d/%d incorrect methods and %d/%d incorrect fields for %s%n%n", badMethods, methods, badFields, fields, namespace);
 		}
+	}
+
+	private static <T> void findDuplicates(Collection<T> entries, Consumer<T> duplicateAcceptor) {
+		entries.stream().filter(e -> Collections.frequency(entries, e) > 1).distinct().forEach(duplicateAcceptor);
+	}
+
+	static String memberString(EntryTriple triple) {
+		return triple.getOwner() + '/' + triple.getName() + triple.getDesc();
 	}
 
 	private static boolean isValid(Set<String> classes, Stream<Type> types) {
