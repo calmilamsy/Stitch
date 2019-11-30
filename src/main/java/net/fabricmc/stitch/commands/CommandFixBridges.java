@@ -82,9 +82,9 @@ public class CommandFixBridges extends Command {
 					//Methods being bridged to shouldn't ever have parents (as they're narrowing a parent's method), but might from an unrelated interface
 					(!method.isFinal() && method.hasParent(jarEntry) ? potentialBridges : potentiallyBridged).add(method);
 				}
-				assert potentiallyBridged.stream().allMatch(method -> (method.method.getAccess() & Opcodes.ACC_BRIDGE) == 0):
-					potentiallyBridged.stream().filter(method -> (method.method.getAccess() & Opcodes.ACC_BRIDGE) != 0)
-					.map(method -> StitchUtil.memberString(method.asEntry())).collect(Collectors.joining(", ", "Didn't suspect bridge flagged method(s) are bridges: [", "]?"));
+				assert potentiallyBridged.stream().allMatch(method -> !Access.isBridge(method.method.getAccess())):
+					potentiallyBridged.stream().filter(method -> Access.isBridge(method.method.getAccess())).map(method -> StitchUtil.memberString(method.asEntry()))
+					.collect(Collectors.joining(", ", "Didn't suspect bridge flagged method(s) are bridges: [", "]?")); //Hopefully things aren't misflagged as bridges
 
 				//No method looks like it is probably a bridge
 				if (potentialBridges.isEmpty()) return Stream.empty();
@@ -110,7 +110,7 @@ public class CommandFixBridges extends Command {
 
 				assert detector.foundBridges().allMatch(bridge -> potentialBridges.stream().map(Method::asEntry).anyMatch(bridge::equals));
 				assert potentialBridges.stream().filter(method -> detector.foundBridges().noneMatch(method.asEntry()::equals))
-					.allMatch(method -> (method.method.getAccess() & Opcodes.ACC_BRIDGE) == 0); //Shouldn't fail to match bridges which are flagged as bridges
+					.noneMatch(method -> Access.isBridge(method.method.getAccess())); //Shouldn't fail to match bridges which are flagged as bridges
 
 				return detector.bridgeMap().entrySet().stream();
 			}).collect(Collectors.toConcurrentMap(Entry::getKey, Entry::getValue));
@@ -503,7 +503,7 @@ public class CommandFixBridges extends Command {
 				couldBeBridge = isProbablyBridge;
 				this.bridgedMethod = bridgedMethod;
 
-				assert !couldBeBridge || (access & Opcodes.ACC_SYNTHETIC) != 0: "Found non-synthetic bridge: " + StitchUtil.memberString(asEntry()) + " => " + StitchUtil.memberString(bridgedMethod);
+				assert !couldBeBridge || Access.isSynthetic(access): "Found non-synthetic bridge: " + StitchUtil.memberString(asEntry()) + " => " + StitchUtil.memberString(bridgedMethod);
 			}
 
 			private void ensureSure() {

@@ -42,4 +42,12 @@ public final class Access {
     public static boolean isNative(int access) {
         return (access & (Opcodes.ACC_NATIVE)) != 0;
     }
+
+    public static boolean isSynthetic(int access) {
+        return (access & (Opcodes.ACC_SYNTHETIC)) != 0;
+    }
+
+    public static boolean isBridge(int access) {
+        return (access & (Opcodes.ACC_BRIDGE)) != 0;
+    }
 }
