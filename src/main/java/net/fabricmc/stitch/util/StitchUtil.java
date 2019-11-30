@@ -25,6 +25,8 @@ import java.nio.file.FileSystemAlreadyExistsException;
 import java.nio.file.FileSystems;
 import java.util.*;
 
+import net.fabricmc.mappings.EntryTriple;
+
 public final class StitchUtil {
     public static class FileSystemDelegate implements AutoCloseable {
         private final FileSystem fileSystem;
@@ -126,4 +128,8 @@ public final class StitchUtil {
     public static long getTime() {
         return new Date().getTime();
     }
+
+	public static String memberString(EntryTriple triple) {
+		return triple.getOwner() + '/' + triple.getName() + triple.getDesc();
+	}
 }

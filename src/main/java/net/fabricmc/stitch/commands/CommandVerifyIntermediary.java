@@ -22,6 +22,7 @@ import net.fabricmc.mappings.Mappings;
 import net.fabricmc.mappings.MappingsProvider;
 import net.fabricmc.mappings.MethodEntry;
 import net.fabricmc.stitch.Command;
+import net.fabricmc.stitch.util.StitchUtil;
 
 public class CommandVerifyIntermediary extends Command {
 	public CommandVerifyIntermediary() {
@@ -70,13 +71,13 @@ public class CommandVerifyIntermediary extends Command {
 
 				methods++;
 				if (!isValid(classes, Stream.concat(Arrays.stream(Type.getArgumentTypes(method.getDesc())), Stream.of(Type.getReturnType(method.getDesc()))))) {
-					System.out.println("Descriptor for " + memberString(method) + " is invalid");
+					System.out.println("Descriptor for " + StitchUtil.memberString(method) + " is invalid");
 					badMethods++;
 				}
 			}
 
 			findDuplicates(mappings.getMethodEntries().stream().map(entry -> entry.get(namespace)).filter(Objects::nonNull).collect(Collectors.toList()), duplicate -> {
-				System.out.println("Duplicate declarations of method mapping in " + namespace + ": " + memberString(duplicate));
+				System.out.println("Duplicate declarations of method mapping in " + namespace + ": " + StitchUtil.memberString(duplicate));
 			});
 
 			int fields = 0, badFields = 0;
@@ -86,13 +87,13 @@ public class CommandVerifyIntermediary extends Command {
 
 				fields++;
 				if (!isValid(classes, Stream.of(Type.getType(field.getDesc())))) {
-					System.out.println("Descriptor for " + memberString(field) + " is invalid");
+					System.out.println("Descriptor for " + StitchUtil.memberString(field) + " is invalid");
 					badFields++;
 				}
 			}
 
 			findDuplicates(mappings.getFieldEntries().stream().map(entry -> entry.get(namespace)).filter(Objects::nonNull).collect(Collectors.toList()), duplicate -> {
-				System.out.println("Duplicate declarations of field mapping in " + namespace + ": " + memberString(duplicate));
+				System.out.println("Duplicate declarations of field mapping in " + namespace + ": " + StitchUtil.memberString(duplicate));
 			});
 
 			System.out.printf("%nFound %d/%d incorrect methods and %d/%d incorrect fields for %s%n%n", badMethods, methods, badFields, fields, namespace);
@@ -101,10 +102,6 @@ public class CommandVerifyIntermediary extends Command {
 
 	private static <T> void findDuplicates(Collection<T> entries, Consumer<T> duplicateAcceptor) {
 		entries.stream().filter(e -> Collections.frequency(entries, e) > 1).distinct().forEach(duplicateAcceptor);
-	}
-
-	static String memberString(EntryTriple triple) {
-		return triple.getOwner() + '/' + triple.getName() + triple.getDesc();
 	}
 
 	private static boolean isValid(Set<String> classes, Stream<Type> types) {
