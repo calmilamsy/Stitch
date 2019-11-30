@@ -344,13 +344,39 @@ public class CommandMergeTiny extends Command {
 					String commonName = ((ClassLine) line).get(commonNamespaceTarget);
 					ClassEntry commonEntry = commonToAllB.get(commonName);
 
-					for (String namespace : extraNamespaces) {
+					on: for (String namespace : extraNamespaces) {
 						writer.write('\t');
 
 						if (commonEntry != null) {
 							String name = commonEntry.get(namespace);
 							if (name != null) writer.write(name);
 						} else if (!leaveHoles) {
+							int split = commonName.lastIndexOf('$');
+
+							out: if (split > 0) {
+								String start = commonName.substring(0, split);
+								StringBuilder end = new StringBuilder(commonName.substring(split + 1));
+
+								ClassEntry partialEntry;
+								while ((partialEntry = commonToAllB.get(start)) == null) {
+									split = start.lastIndexOf('$');
+									if (split < 1) break out;
+
+									end.insert(0, '$').insert(0, start.substring(split + 1));
+									start = start.substring(0, split);
+								};
+
+								assert partialEntry != null;
+								String partialName = partialEntry.get(namespace);
+								if (partialName != null) {
+									writer.write(partialName);
+									writer.write('$');
+									writer.write(end.toString());
+								}
+
+								continue on;
+							}
+
 							writer.write(commonName);
 						}
 					}
