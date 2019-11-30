@@ -1,5 +1,6 @@
 package net.fabricmc.stitch.commands;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -8,13 +9,20 @@ import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.function.Function;
+import java.util.function.UnaryOperator;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -30,6 +38,8 @@ import org.objectweb.asm.Type;
 import net.fabricmc.mappings.EntryTriple;
 import net.fabricmc.stitch.Command;
 import net.fabricmc.stitch.commands.CommandMergeTiny.TinyFile;
+import net.fabricmc.stitch.commands.CommandMergeTiny.TinyFile.MethodLine;
+import net.fabricmc.stitch.commands.CommandMergeTiny.TinyLine;
 import net.fabricmc.stitch.representation.Access;
 import net.fabricmc.stitch.representation.ClassStorage;
 import net.fabricmc.stitch.representation.JarClassEntry;
@@ -68,10 +78,7 @@ public class CommandFixBridges extends Command {
 
 		Map<EntryTriple, EntryTriple> bridges;
 		try (FileSystemDelegate fs = StitchUtil.getJarFileSystem(jar, false)) {
-			bridges = jarEntry.getAllClasses().parallelStream().filter(classEntry -> classEntry.getName().startsWith("net/minecraft/")).flatMap(classEntry -> {
-				/*OptionalInt longestArgs = classEntry.getMethods().stream().mapToInt(method -> Type.getArgumentTypes(method.getDescriptor()).length).max();
-				if (!longestArgs.isPresent()) return Stream.empty();*/
-
+			bridges = jarEntry.getAllClasses().parallelStream().filter(classEntry -> classEntry.getFullyQualifiedName().startsWith("net/minecraft/")).flatMap(classEntry -> {
 				Set<Method> potentialBridges = StitchUtil.newIdentityHashSet();
 				Set<Method> potentiallyBridged = StitchUtil.newIdentityHashSet();
 
@@ -146,10 +153,140 @@ public class CommandFixBridges extends Command {
 				System.out.println("Verification complete, writing to mapping file");
 			} else {
 				System.out.println("Unable to find any bridges in input jar");
+
+				Files.copy(mappingsIn, mappingsOut, StandardCopyOption.COPY_ATTRIBUTES);
+				return; //Nothing more to do
 			}
 		}
 
 		TinyFile input = new TinyFile(mappingsIn);
+		Map<EntryTriple, EntryTriple> bridgedMethods = bridges.entrySet().stream().collect(Collectors.toMap(Entry::getValue, Entry::getKey, (left, right) -> {
+			//System.out.println("Double bridge parents: " + StitchUtil.memberString(left) + " and " + StitchUtil.memberString(right));
+			assert Objects.equals(left.getOwner(), right.getOwner());
+
+			assert !Objects.equals(left.getDesc(), right.getDesc());
+			Type leftReturn = Type.getReturnType(left.getDesc());
+			Type rightReturn = Type.getReturnType(right.getDesc());
+
+			if (!leftReturn.equals(rightReturn)) {
+				return isLeftYounger(jarEntry, leftReturn, rightReturn) ? right : left;
+			}
+
+			Type[] leftArgs = Type.getArgumentTypes(left.getDesc());
+			Type[] rightArgs = Type.getArgumentTypes(right.getDesc());
+			assert leftArgs.length == rightArgs.length;
+
+			for (int i = 0; i < leftArgs.length; i++) {
+				Type leftArg = leftArgs[i];
+				Type rightArg = rightArgs[i];
+
+				if (!leftArg.equals(rightArg)) {
+					return isLeftYounger(jarEntry, leftArg, rightArg) ? right : left;
+				}
+			}
+
+			throw new IllegalStateException("Could not deduce whether to pick " + StitchUtil.memberString(left) + " or " + StitchUtil.memberString(right));
+		}));
+
+		List<String> namespaces = input.getSortedNamespaces().collect(Collectors.toList());
+		Set<String> targetNamespaces = new HashSet<>();
+		Collections.addAll(targetNamespaces, correctiveNamespaces);
+
+		try (BufferedWriter writer = Files.newBufferedWriter(mappingsOut, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+			writer.write(input.firstLine);
+			writer.newLine();
+
+			for (TinyLine line : input.lines()) {
+				if (line.getClass() == MethodLine.class) {
+					MethodLine methodLine;
+					EntryTriple jarMethod = (methodLine = (MethodLine) line).get(jarNamespace);
+
+					assert !bridges.containsKey(jarMethod);
+					if (bridgedMethods.containsKey(jarMethod)) {
+						EntryTriple targetMethod = bridgedMethods.get(jarMethod);
+
+						Function<String, EntryTriple> targetLine = null;
+						for (TinyLine l : input.lines()) {
+							if (l.getClass() == MethodLine.class) {
+								EntryTriple triple = ((MethodLine) l).get(jarNamespace);
+
+								if (triple != null && triple.getName().equals(targetMethod.getName()) && triple.getDesc().equals(targetMethod.getDesc())) {
+									targetLine = ((MethodLine) l)::get;
+									break;
+								}
+							}
+						}
+						if (targetLine == null) {
+							System.out.println("Unable to find " + StitchUtil.memberString(targetMethod) + " in mappings for " + StitchUtil.memberString(jarMethod));
+							//throw new IllegalStateException("Unable to find " + StitchUtil.memberString(targetMethod));
+							targetLine = namespace -> targetMethod; //Improvise and use the target method's name for everything
+						}
+
+						EntryTriple primary = methodLine.get(namespaces.get(0));
+
+						writer.write("METHOD\t");
+						writer.write(primary.getOwner());
+						writer.write('\t');
+						writer.write(primary.getDesc());
+
+						for (String namespace : namespaces) {
+							writer.write('\t');
+							EntryTriple name = targetNamespaces.contains(namespace) ? targetLine.apply(namespace) : methodLine.get(namespace);
+							if (name != null) writer.write(name.getName());
+						}
+
+						writer.newLine();
+						continue;
+					}
+				}
+
+				writer.write(line.line);
+				writer.newLine();
+			}
+		}
+	}
+
+	private static boolean isLeftYounger(ClassStorage classes, Type type, Type potentialParent) {
+		assert !type.equals(potentialParent);
+		assert type.getSort() == Type.OBJECT;
+		String parentName = potentialParent.getInternalName();
+
+		if ("java/lang/Object".equals(parentName)) {
+			assert !"java/lang/Object".equals(type.getInternalName());
+			return true;
+		}
+
+		JarClassEntry origin = classes.getClass(type.getInternalName(), false);
+		if (origin == null) {
+			assert classes.getClass(parentName, false) == null;
+			throw new IllegalStateException("Not sure which is younger between " + type + " and " + parentName);
+		}
+
+		JarClassEntry target = classes.getClass(parentName, false);
+		if (target == null) return true; //Ehhhh probably
+
+		if (!target.isInterface()) {
+			JarClassEntry parent = origin;
+	    	do {
+	    		parent = parent.getSuperClass(classes);
+	    	} while (parent != null && parent != target);
+
+	    	//Found the target as a parent class <=> parent not null
+	    	return parent != null;
+		} else {
+	    	Deque<JarClassEntry> interfaces = new ArrayDeque<>(origin.getInterfaces(classes));
+
+			JarClassEntry itf;
+			while ((itf = interfaces.poll()) != null) {
+				if (itf == target) {
+					return true; //Found the right interface
+				} else {
+					interfaces.addAll(itf.getInterfaces(classes));
+				}
+			}
+
+			return false; //Couldn't find any matching interfaces in the hierarchy
+		}
 	}
 
 	private static final class Method {
@@ -197,7 +334,12 @@ public class CommandFixBridges extends Command {
 		private boolean hasParent0(ClassStorage classes) {
 			JarClassEntry parent = owner;
 	    	do {
-	    		parent = parent.getSuperClass(classes);
+	    		try {
+	    			parent = parent.getSuperClass(classes);
+	    		} catch (AssertionError e) {
+	    			System.err.println("Crash finding the super of " + parent + " (in the hierachy of " + owner + ')');
+	    			throw e;
+	    		}
 	    	} while (parent != null && !parent.getMethods().contains(method));
 
 	    	if (parent != null && parent.getMethods().contains(method)) {
@@ -235,10 +377,6 @@ public class CommandFixBridges extends Command {
 
 				this.targetBridge = targetBridge;
 				String descriptor = targetBridge.desc;
-				/*int packed = Type.getArgumentsAndReturnSizes(descriptor);
-				int argSize = packed >> 2;
-				int returnSize = packed & 0b11;
-				args = Math.max(argSize, returnSize);*/
 				args = Type.getArgumentTypes(descriptor);
 
 				int localSize = Arrays.stream(args).mapToInt(Type::getSize).sum() + 1;
