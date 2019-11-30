@@ -26,6 +26,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -33,6 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import org.objectweb.asm.Type;
 
@@ -43,6 +46,7 @@ import net.fabricmc.mappings.Mappings;
 import net.fabricmc.mappings.MappingsProvider;
 import net.fabricmc.mappings.MethodEntry;
 import net.fabricmc.stitch.Command;
+import net.fabricmc.stitch.commands.CommandMergeTiny.TinyLine.ContextLine;
 import net.fabricmc.stitch.commands.CommandMergeTiny.TinyFile.ClassLine;
 import net.fabricmc.stitch.commands.CommandMergeTiny.TinyFile.FieldLine;
 import net.fabricmc.stitch.commands.CommandMergeTiny.TinyFile.MethodLine;
@@ -62,20 +66,21 @@ public class CommandMergeTiny extends Command {
 		return count >= 3;
 	}
 
-	private static abstract class TinyLine {
+	public static abstract class TinyLine {
 		public final String line;
 
 		public TinyLine(String line) {
 			this.line = line;
 		}
-	}
-	public static class ContextLine extends TinyLine {
-		public ContextLine(String line) {
-			super(line);
-		}
+
+		public static final class ContextLine extends TinyLine {
+			ContextLine(String line) {
+				super(line);
+			}
+		}	
 	}
 
-	static class TinyFile {
+	public static final class TinyFile {
 		public class ClassLine extends TinyLine implements ClassEntry {
 			private final String[] names;
 
@@ -95,10 +100,14 @@ public class CommandMergeTiny extends Command {
 			public String get(String namespace) {
 				return names[namespacesToIds.get(namespace)];
 			}
+
+			public Stream<String> parts() {
+				return Arrays.stream(names);
+			}
 		}
 		public class FieldLine extends TinyLine implements FieldEntry {
-			protected final EntryTriple nativeTriple;
-			protected final String[] names;
+			private final EntryTriple nativeTriple;
+			private final String[] names;
 
 			FieldLine(String line, String[] data, String[] namespaceList) {
 				super(line);
@@ -118,59 +127,64 @@ public class CommandMergeTiny extends Command {
 			public EntryTriple get(String namespace) {
 				if (nativeNamespace.equals(namespace)) return nativeTriple;
 
-				return new EntryTriple(remap(nativeTriple.getOwner(), namespace), names[namespacesToIds.get(namespace)], remapDesc(nativeTriple.getDesc(), namespace));
+				String name = names[namespacesToIds.get(namespace)];
+				if (name == null) return null; //Hole in the mappings, don't provide an EntryTriple with a null name
+				return new EntryTriple(remap(nativeTriple.getOwner(), namespace), name, remapDesc(Type.getType(nativeTriple.getDesc()), namespace));
 			}
 
-			protected String remapDesc(String desc, String namespace) {
-				Type type = Type.getType(desc);
-
+			private String remapDesc(Type type, String namespace) {
 				switch (type.getSort()) {
 				case Type.ARRAY: {
-					String out = remap(type.getElementType().getDescriptor(), namespace);
+					StringBuilder out = new StringBuilder(remapDesc(type.getElementType(), namespace));
 
 					for (int i = 0; i < type.getDimensions(); ++i) {
-						out = '[' + out;
+						out.insert(0, '[');
 					}
 
-					return out;
+					return out.toString();
 				}
 
 				case Type.OBJECT: {
 					String out = remap(type.getInternalName(), namespace);
+					assert out != null;
+					return 'L' + out + ';';
+				}
 
-					if (out != null) {
-						return 'L' + out + ';';
+				case Type.METHOD: {
+					if ("()V".equals(type.getDescriptor())) {
+						return "()V";
 					}
+
+					Type[] args = type.getArgumentTypes();
+					StringBuilder out = new StringBuilder("(");
+					for (int i = 0; i < args.length; i++) {
+						out.append(remapDesc(args[i], namespace));
+					}
+
+					Type returnType = type.getReturnType();
+					if (returnType == Type.VOID_TYPE) {
+						return out.append(")V").toString();
+					}
+
+					return out.append(')').append(remapDesc(returnType, namespace)).toString();
 				}
 
 				default:
-					return desc;
+					return type.getDescriptor();
 				}
+			}
+
+			public Stream<EntryTriple> parts() {
+				return getSortedNamespaces().map(this::get);
+			}
+
+			public Stream<String> names() {
+				return Arrays.stream(names);
 			}
 		}
 		public class MethodLine extends FieldLine implements MethodEntry {
 			MethodLine(String line, String[] data, String[] namespaceList) {
 				super(line, data, namespaceList);
-			}
-
-			@Override
-			protected String remapDesc(String desc, String namespace) {
-				if ("()V".equals(desc)) {
-					return desc;
-				}
-
-				Type[] args = Type.getArgumentTypes(desc);
-				StringBuilder out = new StringBuilder("(");
-				for (int i = 0; i < args.length; i++) {
-					out.append(super.remapDesc(args[i].getDescriptor(), namespace));
-				}
-
-				Type returnType = Type.getReturnType(desc);
-				if (returnType == Type.VOID_TYPE) {
-					return out.append(")V").toString();
-				}
-
-				return out.append(')').append(super.remapDesc(returnType.getDescriptor(), namespace)).toString();
 			}
 		}
 		final Map<String, Integer> namespacesToIds = new HashMap<>();
@@ -178,7 +192,7 @@ public class CommandMergeTiny extends Command {
 		public final String nativeNamespace;
 
 		public final String firstLine;
-		public final List<TinyLine> lines = new ArrayList<>();
+		private final List<TinyLine> lines = new ArrayList<>();
 
 		public TinyFile(Path file) throws IOException {
 			try (BufferedReader reader = Files.newBufferedReader(file)) {
@@ -237,6 +251,14 @@ public class CommandMergeTiny extends Command {
 
 		public Set<String> getNamespaces() {
 			return namespacesToIds.keySet();
+		}
+
+		public Stream<String> getSortedNamespaces() {
+			return getNamespaces().stream().sorted(Comparator.comparingInt(firstLine::indexOf));
+		}
+
+		public List<TinyLine> lines() {
+			return Collections.unmodifiableList(lines);
 		}
 	}
 	@Override
@@ -310,7 +332,7 @@ public class CommandMergeTiny extends Command {
 			}
 			writer.newLine();
 
-			for (TinyLine line : inputA.lines) {
+			for (TinyLine line : inputA.lines()) {
 				Class<? extends TinyLine> lineType = line.getClass();
 
 				if (lineType == ContextLine.class) {
