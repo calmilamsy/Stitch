@@ -42,6 +42,7 @@ public class Main {
         addCommand(new CommandUpdateIntermediary());
 
         addCommand(new CommandFixNesting());
+        addCommand(new CommandFixBridges());
         addCommand(new CommandVerifyIntermediary());
         addCommand(new CommandRenameEnigma());
     }
