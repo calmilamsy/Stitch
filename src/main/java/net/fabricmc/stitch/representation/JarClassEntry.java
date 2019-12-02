@@ -70,8 +70,7 @@ public class JarClassEntry extends AbstractJarEntry {
 
     // unstable
     public Collection<Pair<JarClassEntry, String>> getRelatedMethods(JarMethodEntry m) {
-        //noinspection unchecked
-        return relatedMethods.getOrDefault(m.getKey(), Collections.EMPTY_SET);
+        return relatedMethods.getOrDefault(m.getKey(), Collections.emptySet());
     }
 
     public String getFullyQualifiedName() {
@@ -96,6 +95,17 @@ public class JarClassEntry extends AbstractJarEntry {
 
     public List<JarClassEntry> getInterfaces(ClassStorage storage) {
         return toClassEntryList(storage, interfaces);
+    }
+
+    public List<JarClassEntry> getAllInterfaces(ClassStorage storage) {
+    	List<JarClassEntry> interfaces = getInterfaces(storage);
+
+    	JarClassEntry superClass = getSuperClass(storage);
+    	if (superClass != null) {
+    		interfaces.addAll(superClass.getAllInterfaces(storage));
+    	}
+
+    	return interfaces;
     }
 
     public List<String> getSubclassNames() {
