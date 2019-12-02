@@ -64,7 +64,7 @@ public class CommandFixNesting extends Command {
 					JarEntry entry = it.nextElement();
 
 					Path outPath = newFS.get().getPath(entry.getName());
-			        if (outPath.getParent() != null) {
+			        if (outPath.getParent() != null && Files.notExists(outPath.getParent())) {
 			            Files.createDirectories(outPath.getParent());
 			        }
 
