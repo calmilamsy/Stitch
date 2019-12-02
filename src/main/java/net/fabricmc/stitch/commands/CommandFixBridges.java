@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -274,14 +273,14 @@ public class CommandFixBridges extends Command {
 	    	//Found the target as a parent class <=> parent not null
 	    	return parent != null;
 		} else {
-	    	Deque<JarClassEntry> interfaces = new ArrayDeque<>(origin.getInterfaces(classes));
+	    	Deque<JarClassEntry> interfaces = new ArrayDeque<>(origin.getAllInterfaces(classes));
 
 			JarClassEntry itf;
 			while ((itf = interfaces.poll()) != null) {
 				if (itf == target) {
 					return true; //Found the right interface
 				} else {
-					interfaces.addAll(itf.getInterfaces(classes));
+					interfaces.addAll(itf.getAllInterfaces(classes));
 				}
 			}
 
@@ -346,14 +345,14 @@ public class CommandFixBridges extends Command {
 	    		return true;
 	    	}
 
-	    	Deque<JarClassEntry> interfaces = new ArrayDeque<>(owner.getInterfaces(classes));
+	    	Deque<JarClassEntry> interfaces = new ArrayDeque<>(owner.getAllInterfaces(classes));
 
 			JarClassEntry itf;
 			while ((itf = interfaces.poll()) != null) {
 				if (itf.getMethods().contains(method)) {
 					return true;
 				} else {
-					interfaces.addAll(itf.getInterfaces(classes));
+					interfaces.addAll(itf.getAllInterfaces(classes));
 				}
 			}
 
@@ -530,14 +529,14 @@ public class CommandFixBridges extends Command {
 			    	//Found the target as a parent class <=> parent not null
 			    	return parent != null;
 				} else {
-			    	Deque<JarClassEntry> interfaces = new ArrayDeque<>(origin.getInterfaces(classes));
+			    	Deque<JarClassEntry> interfaces = new ArrayDeque<>(origin.getAllInterfaces(classes));
 
 					JarClassEntry itf;
 					while ((itf = interfaces.poll()) != null) {
 						if (itf == target) {
 							return true; //Found the right interface
 						} else {
-							interfaces.addAll(itf.getInterfaces(classes));
+							interfaces.addAll(itf.getAllInterfaces(classes));
 						}
 					}
 
