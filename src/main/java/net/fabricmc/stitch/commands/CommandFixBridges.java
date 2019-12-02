@@ -395,6 +395,12 @@ public class CommandFixBridges extends Command {
 				}
 			}
 
+			private void invalidate() {
+				assert valid;
+				valid = false;
+				assert !Access.isBridge(targetBridge.access): "Flagged bridge " + StitchUtil.memberString(targetBridge.asEntry()) + " is not a bridge?";
+			}
+
 			private void ensureExpected(int opcode, int... validOpcodes) {
 				if (!valid) return;
 
@@ -402,7 +408,7 @@ public class CommandFixBridges extends Command {
 					if (validOpcode == opcode) return;
 				}
 
-				valid = false;
+				invalidate();
 			}
 
 			@Override
@@ -416,13 +422,13 @@ public class CommandFixBridges extends Command {
 				ensureExpected(opcode, Opcodes.IRETURN, Opcodes.LRETURN, Opcodes.FRETURN, Opcodes.DRETURN, Opcodes.ARETURN, Opcodes.RETURN);
 
 				if (valid) {
-					if (seenReturn) valid = false; else seenReturn = true;
+					if (seenReturn) invalidate(); else seenReturn = true;
 				}
 			}
 
 			@Override
 			public void visitIntInsn(int opcode, int operand) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
@@ -432,7 +438,7 @@ public class CommandFixBridges extends Command {
 
 				if (valid) {
 					assert var < seenArg.length;
-					if (seenArg[var]) valid = false; else seenArg[var] = true; 
+					if (seenArg[var]) invalidate(); else seenArg[var] = true; 
 				}
 			}
 
@@ -444,14 +450,14 @@ public class CommandFixBridges extends Command {
 
 			@Override
 			public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
 			public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
 				if (valid) {
 					if (seenMethod != null) {
-						valid = false;
+						invalidate();
 						return;
 					}
 					seenMethod = new EntryTriple(owner, name, descriptor);
@@ -461,7 +467,7 @@ public class CommandFixBridges extends Command {
 
 					if (valid) {
 						if (!targetBridge.owner.equals(owner)) {
-							valid = false;
+							invalidate();
 							return;
 						}
 
@@ -471,35 +477,39 @@ public class CommandFixBridges extends Command {
 						JarMethodEntry bridged = classEntry.getMethod(name + descriptor);
 						//assert bridged != null: "Unable to find method within class: " + owner + '/' + name + descriptor;
 						if (bridged == null) {//Happens when an inherited method is claimed to be on owner instead
-							valid = false;
+							invalidate();
 							return;
 						}
 
 						//Expect some descriptor narrowing of bridged method compared to the bridge itself
 						if (descriptor.equals(targetBridge.desc)) {
-							valid = false; //If the signatures are completely the same it's not a real bridge, more likely just an accessor
+							invalidate(); //If the signatures are completely the same it's not a real bridge, more likely just an accessor
 							return;
 						}
 
 						Type[] bridgedArgs = Type.getArgumentTypes(descriptor);
 						if (bridgedArgs.length != args.length) {
-							valid = false; //Wrong number of arguments
+							invalidate(); //Wrong number of arguments
 							return;
 						}
 
 						for (int i = 0; i < bridgedArgs.length; i++) {
 							if (!relatedTypes(bridgedArgs[i], args[i])) {
-								valid = false; //Not the same as, nor narrowing, the parameter type
+								invalidate(); //Not the same as, nor narrowing, the parameter type
 								return;
 							}
 						}
 						if (!relatedTypes(Type.getReturnType(descriptor), returnType)) {
-							valid = false; //Not the same as, nor narrowing, the return type
+							invalidate(); //Not the same as, nor narrowing, the return type
 							return;
 						}
 
 						//The access of the bridged method should match the access of the bridge itself
-						assert (targetBridge.access & Modifier.PUBLIC | Modifier.PROTECTED | Modifier.PRIVATE) == (bridged.getAccess() & Modifier.PUBLIC | Modifier.PROTECTED | Modifier.PRIVATE);
+						if ((targetBridge.access & (Modifier.PUBLIC | Modifier.PROTECTED | Modifier.PRIVATE)) != (bridged.getAccess() & (Modifier.PUBLIC | Modifier.PROTECTED | Modifier.PRIVATE))) {
+							//"Inconsistent access between bridge: " + targetBridge.getID() + " (" + targetBridge.access + ") and target " + name + descriptor + " (" + bridged.getAccess() + ") in " + owner;
+							invalidate();
+							return;
+						}
 					}
 				}
 			}
@@ -546,42 +556,42 @@ public class CommandFixBridges extends Command {
 
 			@Override
 			public void visitInvokeDynamicInsn(String name, String descriptor, Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
 			public void visitJumpInsn(int opcode, Label label) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
 			public void visitLdcInsn(Object value) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
 			public void visitIincInsn(int var, int increment) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
 			public void visitTableSwitchInsn(int min, int max, Label defaultHandler, Label... labels) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
 			public void visitLookupSwitchInsn(Label defaultHandler, int[] keys, Label[] labels) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
 			public void visitMultiANewArrayInsn(String descriptor, int numDimensions) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
 			public void visitTryCatchBlock(Label start, Label end, Label handler, String type) {
-				valid = false; //Shouldn't see any of these
+				if (valid) invalidate(); //Shouldn't see any of these
 			}
 
 			@Override
@@ -589,7 +599,7 @@ public class CommandFixBridges extends Command {
 				if (valid) {
 					//maxStack should be the same size as maxLocals as all args need to be loaded in
 					//There should be enough room in maxLocals for all the args too
-					if (maxStack != maxLocals || maxLocals != argSize) valid = false;
+					if (maxStack != maxLocals || maxLocals != argSize) invalidate();
 				}
 			}
 
@@ -597,13 +607,13 @@ public class CommandFixBridges extends Command {
 			public void visitEnd() {
 				out: if (valid) {
 					if (!seenReturn || seenMethod == null) {
-						valid = false;
+						invalidate();
 						break out;
 					}
 
 					for (boolean arg : seenArg) {
 						if (!arg) {
-							valid = false;
+							invalidate();
 							break out;
 						}
 					}
