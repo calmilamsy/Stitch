@@ -41,6 +41,7 @@ public class Main {
         addCommand(new CommandRewriteIntermediary());
         addCommand(new CommandUpdateIntermediary());
 
+        addCommand(new CommandCorrectMappingUnions());
         addCommand(new CommandFixNesting());
         addCommand(new CommandFixBridges());
         addCommand(new CommandVerifyIntermediary());
