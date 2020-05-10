@@ -40,9 +40,8 @@ public final class Pair<K, V> {
     }
 
     @Override
-    protected Object clone() throws CloneNotSupportedException {
-        //noinspection unchecked
-        return new Pair(left, right);
+    protected Pair<K, V> clone() throws CloneNotSupportedException {
+        return new Pair<>(left, right);
     }
 
     @Override
@@ -50,7 +49,7 @@ public final class Pair<K, V> {
         if (!(o instanceof Pair)) {
             return false;
         } else {
-            Pair other = (Pair) o;
+            Pair<?, ?> other = (Pair<?, ?>) o;
             return Objects.equals(other.left, left) && Objects.equals(other.right, right);
         }
     }
