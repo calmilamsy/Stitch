@@ -32,12 +32,12 @@ public class CommandUpdateIntermediary extends Command {
 
     @Override
     public String getHelpString() {
-        return "<old-jar> <new-jar> <old-glued-mapping-file> <new-glue-mapping-file> <new-mapping-file> <match-file> [-k|--keep-glue]";
+        return "<old-jar> <new-jar> <old-glued-mapping-file> <new-glue-mapping-file> <new-mapping-file> <match-file> [-k|--keep-glue] [-t|--target-namespace <namespace>] [-p|--obfuscation-pattern <regex pattern>]";
     }
 
     @Override
     public boolean isArgumentCountValid(int count) {
-        return count == 6 || count == 7;
+        return count >= 6;
     }
 
     @Override
@@ -64,12 +64,27 @@ public class CommandUpdateIntermediary extends Command {
         try (FileInputStream in = new FileInputStream(new File(args[3]))) {
         	state = new GenState(MappingsProvider.readTinyMappings(in));
         }
+        boolean clearedPatterns = false;
 
         for (int i = 6; i < args.length; i++) {
             switch (args[i].toLowerCase(Locale.ROOT)) {
                 case "-k":
                 case "--keep-glue":
                 	state.keepGlue();
+                    break;
+                case "-t":
+                case "--target-namespace":
+                    state.setTargetNamespace(args[i + 1]);
+                    i++;
+                    break;
+                case "-p":
+                case "--obfuscation-pattern":
+                    if (!clearedPatterns)
+                        state.clearObfuscatedPatterns();
+                    clearedPatterns = true;
+
+                    state.addObfuscatedPattern(args[i + 1]);
+                    i++;
                     break;
             }
         }
