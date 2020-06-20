@@ -33,9 +33,21 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.BiPredicate;
 
 public class CommandProposeFieldNames extends Command {
+	public interface NameAcceptor {
+		/**
+		 * Whether to use the given replacementName for the given inputMapping rather than the given originalName
+		 * 
+		 * @param inputMapping The mapping of the field in primary namespace mappings
+		 * @param originalName The name for the field if the given replacement name isn't used
+		 * @param replacementName The suggested replacement name for the field
+		 * 
+		 * @return Whether to ues the given replacement name in favour of the original
+		 */
+		boolean use(EntryTriple inputMapping, String originalName, String replacementName);
+	}
+	
     public CommandProposeFieldNames() {
         super("proposeFieldNames");
     }
@@ -57,10 +69,10 @@ public class CommandProposeFieldNames extends Command {
 		// the namespace written to; write to input namespace if not specified
 		String outputNamespace = args.length > 4 ? args[4] : args.length == 4 ? inputNamespace : "named";
 
-    	run(new File(args[0]), new File(args[1]), new File(args[2]), inputNamespace, outputNamespace, (existingMapping, replacement) -> true);
+    	run(new File(args[0]), new File(args[1]), new File(args[2]), inputNamespace, outputNamespace, (inputMapping, original, replacement) -> true);
     }
 
-    public static void run(File inputJar, File inputMappings, File outputMappings, String inputNamespace, String outputNamespace, BiPredicate<EntryTriple, String> acceptor) throws IOException {
+    public static void run(File inputJar, File inputMappings, File outputMappings, String inputNamespace, String outputNamespace, NameAcceptor acceptor) throws IOException {
         // entrytriple from the input jar namespace
         Map<EntryTriple, String> fieldNamesO = new FieldNameFinder().findNames(inputJar);
 
@@ -123,7 +135,7 @@ public class CommandProposeFieldNames extends Command {
                     // second+ line
                     if (tabSplit[0].equals("FIELD")) {
                         EntryTriple key = new EntryTriple(tabSplit[1], tabSplit[3], tabSplit[2]);
-						if (fieldNames.containsKey(key) && acceptor.test(key, fieldNames.get(key))) {
+						if (fieldNames.containsKey(key) && acceptor.use(key, tabSplit[headerPos + 2], fieldNames.get(key))) {
                             tabSplit[headerPos + 2] = fieldNames.get(key);
 
                             StringBuilder builder = new StringBuilder(tabSplit[0]);
