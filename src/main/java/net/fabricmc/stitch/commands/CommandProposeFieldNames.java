@@ -33,6 +33,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiPredicate;
 
 public class CommandProposeFieldNames extends Command {
     public CommandProposeFieldNames() {
@@ -56,10 +57,10 @@ public class CommandProposeFieldNames extends Command {
 		// the namespace written to; write to input namespace if not specified
 		String outputNamespace = args.length > 4 ? args[4] : args.length == 4 ? inputNamespace : "named";
 
-    	run(new File(args[0]), new File(args[1]), new File(args[2]), inputNamespace, outputNamespace);
+    	run(new File(args[0]), new File(args[1]), new File(args[2]), inputNamespace, outputNamespace, (existingMapping, replacement) -> true);
     }
 
-    public static void run(File inputJar, File inputMappings, File outputMappings, String inputNamespace, String outputNamespace) throws IOException {
+    public static void run(File inputJar, File inputMappings, File outputMappings, String inputNamespace, String outputNamespace, BiPredicate<EntryTriple, String> acceptor) throws IOException {
         // entrytriple from the input jar namespace
         Map<EntryTriple, String> fieldNamesO = new FieldNameFinder().findNames(inputJar);
 
@@ -122,7 +123,7 @@ public class CommandProposeFieldNames extends Command {
                     // second+ line
                     if (tabSplit[0].equals("FIELD")) {
                         EntryTriple key = new EntryTriple(tabSplit[1], tabSplit[3], tabSplit[2]);
-						if (fieldNames.containsKey(key)) {
+						if (fieldNames.containsKey(key) && acceptor.test(key, fieldNames.get(key))) {
                             tabSplit[headerPos + 2] = fieldNames.get(key);
 
                             StringBuilder builder = new StringBuilder(tabSplit[0]);
