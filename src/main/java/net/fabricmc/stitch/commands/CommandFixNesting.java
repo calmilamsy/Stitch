@@ -62,11 +62,12 @@ public class CommandFixNesting extends Command {
 
 				for (Enumeration<JarEntry> it = oldJarFile.entries(); it.hasMoreElements();) {
 					JarEntry entry = it.nextElement();
+					if (entry.isDirectory()) continue; //No need to copy these over
 
 					Path outPath = newFS.get().getPath(entry.getName());
-			        if (outPath.getParent() != null && Files.notExists(outPath.getParent())) {
-			            Files.createDirectories(outPath.getParent());
-			        }
+					if (outPath.getParent() != null && Files.notExists(outPath.getParent())) {
+						Files.createDirectories(outPath.getParent());
+					}
 
 					if (entry.getName().endsWith(".class")) {
 						JarClassEntry clazz = jarEntry.getClass(FilenameUtils.removeExtension(entry.getName()), false);
@@ -135,7 +136,7 @@ public class CommandFixNesting extends Command {
 						}
 					}
 
-			        Files.copy(oldJarFile.getInputStream(entry), outPath);
+					Files.copy(oldJarFile.getInputStream(entry), outPath);
 				}
 			}
 
