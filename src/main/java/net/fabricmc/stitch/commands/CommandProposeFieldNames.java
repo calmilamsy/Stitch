@@ -99,7 +99,7 @@ public class CommandProposeFieldNames extends Command {
 
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] tabSplit = line.split("\t");
+                String[] tabSplit = line.split("\t", -1);
 
                 if (headerPos < 0) {
                     // first line
