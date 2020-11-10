@@ -98,6 +98,7 @@ public class CommandProposeFieldNames extends Command {
             int headerPos = -1;
 
             String line;
+            int lineCount = 0;
             while ((line = reader.readLine()) != null) {
                 String[] tabSplit = line.split("\t", -1);
 
@@ -154,6 +155,8 @@ public class CommandProposeFieldNames extends Command {
                     line = line + "\n";
                 }
 
+                System.out.println(lineCount);
+                lineCount++;
                 writer.write(line);
             }
         }
